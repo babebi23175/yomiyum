@@ -1,0 +1,54 @@
+name: Android CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Android app
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      - name: Build debug APK
+        run: gradle assembleDebug
+
+      - name: Prepare release artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          short_sha="${GITHUB_SHA::7}"
+          mkdir -p release
+          cp app/build/outputs/apk/debug/app-debug.apk "release/yomiyum-debug-${short_sha}.apk"
+
+      - name: Publish APK to GitHub Releases
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          short_sha="${GITHUB_SHA::7}"
+          tag="build-${short_sha}"
+          apk="release/yomiyum-debug-${short_sha}.apk"
+
+          gh release create "${tag}" "${apk}" \
+            --target "${GITHUB_SHA}" \
+            --title "YomiYum build ${short_sha}" \
+            --notes "Automated debug APK build for commit ${GITHUB_SHA}."
